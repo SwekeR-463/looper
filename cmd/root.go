@@ -22,6 +22,8 @@ var rootCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		
+		outputName, _ := cmd.Flags().GetString("output")
+		
 		fmt.Println("Downloading audio...")
 		audioFile, err := internal.DownloadAudio(url)
 		if err != nil {
@@ -31,7 +33,7 @@ var rootCmd = &cobra.Command{
 		defer os.Remove(audioFile)
 		
 		fmt.Printf("Creating %d min loop (max)...\n", duration)
-		loopedFile, err := internal.CreateLoop(audioFile, duration)
+		loopedFile, err := internal.CreateLoop(audioFile, duration, outputName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating loop: %v\n", err)
 			os.Exit(1)
@@ -59,4 +61,5 @@ func Execute() {
 func init() {
 	rootCmd.Flags().BoolP("play", "p", false, "Play the looped audio after creation")
 	rootCmd.Flags().IntP("duration", "d", 30, "Target duration in minutes (default: 30, max: 30)")
+	rootCmd.Flags().StringP("output", "o", "looped_30min.mp3", "Output file name")
 }

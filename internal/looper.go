@@ -34,7 +34,10 @@ func getDuration(audioFile string) (float64, error) {
 	return duration, nil
 }
 
-func CreateLoop(audioFile string, targetMinutes int) (string, error) {
+func CreateLoop(audioFile string, targetMinutes int, outputName string) (string, error) {
+	if strings.TrimSpace(outputName) == "" {
+		outputName = "looped_30min.mp3"
+	}
 	duration, err := getDuration(audioFile)
 	if err != nil {
 		return "", err
@@ -64,30 +67,34 @@ func CreateLoop(audioFile string, targetMinutes int) (string, error) {
 	}
 	
 	// Generate output filename
-	outputFile := filepath.Join(outputDir, "looped_30min.mp3")
+	outputFile, err := filepath.Abs(filepath.Join(outputDir, outputName))
+	if err != nil {
+		return "", err
+	}
 	
-	// Use ffmpeg to concatenate the file with itself
-	// Method: use concat demuxer with a file list
-	tmpDir := filepath.Dir(audioFile)
-	listFile := filepath.Join(tmpDir, "concat_list.txt")
-	var listContent strings.Builder
+	// mp3 supports lossless byte-level concatenation via the ffmpeg concat
+	// protocol — no timestamp math, unlike the concat demuxer which emits
+	// non-monotonic DTS warnings on mp3's negative encoder-delay start.
+	var concat strings.Builder
+	concat.WriteString("concat:")
 	for i := 0; i < loops; i++ {
-		listContent.WriteString(fmt.Sprintf("file '%s'\n", audioFile))
+		if i > 0 {
+			concat.WriteByte('|')
+		}
+		concat.WriteString(filepath.Base(audioFile))
 	}
-	
-	if err := os.WriteFile(listFile, []byte(listContent.String()), 0644); err != nil {
-		return "", fmt.Errorf("failed to write concat list: %w", err)
-	}
-	defer os.Remove(listFile)
 	
 	cmd := exec.Command("ffmpeg",
 		"-y",
-		"-f", "concat",
-		"-safe", "0",
-		"-i", listFile,
+		"-i", concat.String(),
 		"-c", "copy",
 		outputFile,
 	)
+	// Relative paths keep the concat URL well under PATH_MAX.
+	// ponytail: concat protocol caps at ~100 segments (PATH_MAX/len(name));
+	// songs under ~20s at 30min target would exceed it — switch to concat
+	// demuxer + re-encode if that ever matters.
+	cmd.Dir = filepath.Dir(audioFile)
 	
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
