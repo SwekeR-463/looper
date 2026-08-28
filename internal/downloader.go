@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 )
 
-func DownloadAudio(url string) (string, error) {
+func DownloadAudio(url string) (string, string, error) {
 	tmpDir, err := os.MkdirTemp("", "looper-*")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	
 	outputTemplate := filepath.Join(tmpDir, "audio.%(ext)s")
@@ -28,22 +28,22 @@ func DownloadAudio(url string) (string, error) {
 	
 	if err := cmd.Run(); err != nil {
 		os.RemoveAll(tmpDir)
-		return "", fmt.Errorf("yt-dlp failed: %w", err)
+		return "", "", fmt.Errorf("yt-dlp failed: %w", err)
 	}
 	
 	// Find the downloaded file
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
 		os.RemoveAll(tmpDir)
-		return "", err
+		return "", "", err
 	}
 	
 	for _, entry := range entries {
 		if filepath.Ext(entry.Name()) == ".mp3" {
-			return filepath.Join(tmpDir, entry.Name()), nil
+			return filepath.Join(tmpDir, entry.Name()), tmpDir, nil
 		}
 	}
 	
 	os.RemoveAll(tmpDir)
-	return "", fmt.Errorf("no mp3 file found after download")
+	return "", "", fmt.Errorf("no mp3 file found after download")
 }
